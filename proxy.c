@@ -52,11 +52,11 @@ typedef struct sockaddr SA;
 
 /* Information about a connected client. */
 typedef struct {
-    struct sockaddr_in addr;    // Socket address
-    socklen_t addrlen;          // Socket address length
-    int connfd;                 // Client connection file descriptor
-    char host[HOSTLEN];         // Client host
-    char serv[SERVLEN];         // Client service (port)
+    struct sockaddr_in addr; // Socket address
+    socklen_t addrlen;       // Socket address length
+    int connfd;              // Client connection file descriptor
+    char host[HOSTLEN];      // Client host
+    char serv[SERVLEN];      // Client service (port)
 } client_info;
 
 /*
@@ -71,7 +71,7 @@ static const char *proxy_header_connection = "Proxy-Connection: close\r\n";
 
 /**
  * clienterror - returns an error message to the client
- * 
+ *
  */
 void clienterror(int fd, const char *errnum, const char *shortmsg,
                  const char *longmsg) {
@@ -82,25 +82,25 @@ void clienterror(int fd, const char *errnum, const char *shortmsg,
 
     /* Build the HTTP response body */
     bodylen = snprintf(body, MAXBUF,
-            "<!DOCTYPE html>\r\n" \
-            "<html>\r\n" \
-            "<head><title>Proxy Error</title></head>\r\n" \
-            "<body bgcolor=\"ffffff\">\r\n" \
-            "<h1>%s: %s</h1>\r\n" \
-            "<p>%s</p>\r\n" \
-            "<hr /><em>The Proxy Web server</em>\r\n" \
-            "</body></html>\r\n", \
-            errnum, shortmsg, longmsg);
+                       "<!DOCTYPE html>\r\n"
+                       "<html>\r\n"
+                       "<head><title>Proxy Error</title></head>\r\n"
+                       "<body bgcolor=\"ffffff\">\r\n"
+                       "<h1>%s: %s</h1>\r\n"
+                       "<p>%s</p>\r\n"
+                       "<hr /><em>The Proxy Web server</em>\r\n"
+                       "</body></html>\r\n",
+                       errnum, shortmsg, longmsg);
     if (bodylen >= MAXBUF) {
         return; // Overflow!
     }
 
     /* Build the HTTP response headers */
     buflen = snprintf(buf, MAXLINE,
-            "HTTP/1.0 %s %s\r\n" \
-            "Content-Type: text/html\r\n" \
-            "Content-Length: %zu\r\n\r\n", \
-            errnum, shortmsg, bodylen);
+                      "HTTP/1.0 %s %s\r\n"
+                      "Content-Type: text/html\r\n"
+                      "Content-Length: %zu\r\n\r\n",
+                      errnum, shortmsg, bodylen);
     if (buflen >= MAXLINE) {
         return; // Overflow!
     }
@@ -120,7 +120,7 @@ void clienterror(int fd, const char *errnum, const char *shortmsg,
 
 /**
  * parse_uri parse URI to make sure valid request
- * 
+ *
  */
 
 int parse_uri(char *uri, char *host, char *path) {
@@ -133,7 +133,7 @@ int parse_uri(char *uri, char *host, char *path) {
     if (strstr(uri, "/../") != NULL) {
         return 1;
     }
-    
+
     char protocol[MAXLINE];
     strcpy(path, "/");
     if (strstr(uri, "://") != NULL) {
@@ -145,20 +145,20 @@ int parse_uri(char *uri, char *host, char *path) {
             return 1;
         }
     } else {
-         sscanf(uri, "%[^/]%s", host, path);
+        sscanf(uri, "%[^/]%s", host, path);
         return 0;
     }
 }
 
 /**
  * parse_port: prases hostname and port number of actual web server.
- * 
+ *
  * If no port number provided, 80 will be used as default.
  */
-void parse_port(char* host, char* hostname, char* port) {
+void parse_port(char *host, char *hostname, char *port) {
     strcpy(hostname, host);
     char *pos = NULL;
-    pos = index(hostname, ':');
+    pos = strchr(hostname, ':');
     if (pos != NULL) {
         strcpy(port, pos + 1);
         *pos = '\0';
@@ -171,12 +171,12 @@ void parse_port(char* host, char* hostname, char* port) {
 /**
  * build_requesthdrs - read from client request header and
  * builds a new header for proxy.
- * 
+ *
  * Returns true if an error occured, or false otherwise.
- * 
+ *
  */
 bool build_requesthdrs(client_info *client, rio_t *rp, char *proxy_request,
-                    char *method, char *path, char *host) {
+                       char *method, char *path, char *host) {
     char buf[MAXLINE];
     char name[MAXLINE];
     char value[MAXLINE];
@@ -190,10 +190,10 @@ bool build_requesthdrs(client_info *client, rio_t *rp, char *proxy_request,
     strcat(proxy_request, host);
     strcat(proxy_request, "\r\n");
     strcat(proxy_request, header_connection); // Req header connection
-    strcat(proxy_request, proxy_header_connection); // Req header proxy connection
+    strcat(proxy_request,
+           proxy_header_connection);          // Req header proxy connection
     strcat(proxy_request, header_user_agent); // Req user agent
 
-    
     while (true) {
         if (rio_readlineb(rp, buf, sizeof(buf)) <= 0) {
             return true;
@@ -212,12 +212,17 @@ bool build_requesthdrs(client_info *client, rio_t *rp, char *proxy_request,
                         "Proxy could not parse request headers");
             return true;
         }
-        name = tolower(name);
-        if (strcmp(name, "host") || strcmp(name, "connection"), 
-            || strcmp(name, "user-agent")) {
+
+        /* Convert name to lowercase */
+        for (size_t i = 0; name[i] != '\0'; i++) {
+            name[i] = tolower(name[i]);
+        }
+        /* Skip if already added */
+        if (strcmp(name, "host") || strcmp(name, "connection") ||
+            strcmp(name, "user-agent")) {
             continue;
         }
-        
+
         strcat(proxy_request, buf);
 
         // /* Convert name to lowercase */
@@ -231,19 +236,20 @@ bool build_requesthdrs(client_info *client, rio_t *rp, char *proxy_request,
 
 /**
  * do_proxy - fetch from real web server and respond to client.
- * 
+ *
  * Forwards requests from clients to web servers and forwards responses
  * from webservers back to clients
- * 
+ *
  */
-void do_proxy(client_info *client, char *proxy_request, char *srv_hostname, char *srv_port) {
+void do_proxy(client_info *client, char *proxy_request, char *srv_hostname,
+              char *srv_port) {
     int proxy_clientfd;
     char srv_buf[MAXLINE];
     rio_t srv_rio;
 
     proxy_clientfd = open_clientfd(srv_hostname, srv_port);
     if (proxy_clientfd < 0) {
-        fprintf(stderr, "Failed to connect to web server: %s:%s\n", 
+        fprintf(stderr, "Failed to connect to web server: %s:%s\n",
                 srv_hostname, srv_port);
         return;
     }
@@ -255,36 +261,34 @@ void do_proxy(client_info *client, char *proxy_request, char *srv_hostname, char
     }
 
     int size = 0;
-    while ((size = rio_readlineb(&srv_rio, svr_buf, MAXLINE)) > 0) {
+    while ((size = rio_readlineb(&srv_rio, srv_buf, MAXLINE)) > 0) {
         rio_writen(client->connfd, srv_buf, size);
         printf("%s\n", srv_buf);
     }
     close(proxy_clientfd);
-
 }
 
 /**
  * serve - handles one HTTP request/response transaction
- * 
+ *
  */
 void serve(client_info *client) {
     // Get some extra info about the client (hostname/port)
     // This is optional, but it's nice to know who's connected
-    int res = getnameoinfo(
-                (SA *) &client->addr, client->addrlen,
-                client->host, sizeof(client->host),
-                client->serv, sizeof(client->serv),
-                0);
-    if (res == 0) {
-        printf("Accepted connection from %s:%s\n", client->host, client->serv);
-    } else {
-        fprintf(stderr, "getnameinfo failed: %s\n", gai_sterror(res));
-    }
+    // int res = getnameinfo((SA *)&client->addr, client->addrlen, client->host,
+    //                       sizeof(client->host), client->serv,
+    //                       sizeof(client->serv), 0);
+    // if (res == 0) {
+    //     printf("Accepted connection from %s:%s\n", client->host,
+    //     client->serv);
+    // } else {
+    //     fprintf(stderr, "getnameinfo failed: %s\n", gai_strerror(res));
+    // }
 
     rio_t rio;
     // Associate a descriptor with a read buffer and reset buffer
     rio_readinitb(&rio, client->connfd);
-    
+
     /* Read request line */
     char buf[MAXLINE];
     // Robustly read a text line (buffered)
@@ -301,8 +305,8 @@ void serve(client_info *client) {
 
     /* sscanf must parse exactly 3 things for request line to be well-formed */
     /* version must be either HTTP/1.0 or HTTP/1.1 */
-    if (sscanf(buf, "%s %s HTTP/1.%c", method, uri, &version) != 3
-            || (version != '0' && version != '1'))  {
+    if (sscanf(buf, "%s %s HTTP/1.%c", method, uri, &version) != 3 ||
+        (version != '0' && version != '1')) {
         clienterror(client->connfd, "400", "Bad Request",
                     "Proxy received a malformed request");
         return;
@@ -336,7 +340,6 @@ void serve(client_info *client) {
 
     /* finally, proxy the request for client */
     do_proxy(client, proxy_request, srv_hostname, srv_port);
-
 }
 
 int main(int argc, char **argv) {
@@ -364,8 +367,8 @@ int main(int argc, char **argv) {
         client->addrlen = sizeof(client->addr);
 
         /* accept() will block until a client connects to the port */
-        client->connfd = accept(listenfd, 
-                (SA *) &client->addr, &client->addrlen);
+        client->connfd =
+            accept(listenfd, (SA *)&client->addr, &client->addrlen);
         if (client->connfd < 0) {
             perror("accept");
             continue;
@@ -378,4 +381,3 @@ int main(int argc, char **argv) {
 
     return -1; // never reaches here
 }
-
