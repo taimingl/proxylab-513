@@ -139,10 +139,10 @@ int parse_uri(char *uri, char *host, char *path) {
     if (strstr(uri, "://") != NULL) {
         sscanf(uri, "%[^:]://%[^/]%s", protocol, host, path);
         if (strcasecmp(protocol, "http")) {
-            return 0;
-        } else {
             printf("Proxy does not support protocol: %s\n", protocol);
             return 1;
+        } else {
+            return 0;
         }
     } else {
         sscanf(uri, "%[^/]%s", host, path);
@@ -180,6 +180,9 @@ bool build_requesthdrs(client_info *client, rio_t *rp, char *proxy_request,
     char buf[MAXLINE];
     char name[MAXLINE];
     char value[MAXLINE];
+    memset(buf, 0, MAXLINE * sizeof(char));
+    memset(name, 0, MAXLINE * sizeof(char));
+    memset(value, 0, MAXLINE * sizeof(char));
 
     /* Write the uniform name:value first */
     strcat(proxy_request, method); // Req Method
@@ -218,8 +221,8 @@ bool build_requesthdrs(client_info *client, rio_t *rp, char *proxy_request,
             name[i] = tolower(name[i]);
         }
         /* Skip if already added */
-        if (strcmp(name, "host") || strcmp(name, "connection") ||
-            strcmp(name, "user-agent")) {
+        if (strcmp(name, "host") == 0 || strcmp(name, "connection") == 0 ||
+            strcmp(name, "user-agent") == 0) {
             continue;
         }
 
@@ -246,6 +249,7 @@ void do_proxy(client_info *client, char *proxy_request, char *srv_hostname,
     int proxy_clientfd;
     char srv_buf[MAXLINE];
     rio_t srv_rio;
+    memset(srv_buf, 0, MAXLINE * sizeof(char));
 
     proxy_clientfd = open_clientfd(srv_hostname, srv_port);
     if (proxy_clientfd < 0) {
@@ -254,16 +258,17 @@ void do_proxy(client_info *client, char *proxy_request, char *srv_hostname,
         return;
     }
 
-    rio_readinitb(&srv_rio, proxy_clientfd);
+    // rio_readinitb(&srv_rio, proxy_clientfd);
     if (rio_writen(proxy_clientfd, proxy_request, strlen(proxy_request)) < 0) {
         fprintf(stderr, "Error: writing to web server error\n");
         return;
     }
 
+    rio_readinitb(&srv_rio, proxy_clientfd);
     int size = 0;
     while ((size = rio_readlineb(&srv_rio, srv_buf, MAXLINE)) > 0) {
         rio_writen(client->connfd, srv_buf, size);
-        printf("%s\n", srv_buf);
+        // printf("%s\n", srv_buf);
     }
     close(proxy_clientfd);
 }
@@ -275,15 +280,14 @@ void do_proxy(client_info *client, char *proxy_request, char *srv_hostname,
 void serve(client_info *client) {
     // Get some extra info about the client (hostname/port)
     // This is optional, but it's nice to know who's connected
-    // int res = getnameinfo((SA *)&client->addr, client->addrlen, client->host,
-    //                       sizeof(client->host), client->serv,
-    //                       sizeof(client->serv), 0);
-    // if (res == 0) {
-    //     printf("Accepted connection from %s:%s\n", client->host,
-    //     client->serv);
-    // } else {
-    //     fprintf(stderr, "getnameinfo failed: %s\n", gai_strerror(res));
-    // }
+    int res = getnameinfo((SA *)&client->addr, client->addrlen, client->host,
+                          sizeof(client->host), client->serv,
+                          sizeof(client->serv), 0);
+    if (res == 0) {
+        printf("Accepted connection from %s:%s\n", client->host, client->serv);
+    } else {
+        fprintf(stderr, "getnameinfo failed: %s\n", gai_strerror(res));
+    }
 
     rio_t rio;
     // Associate a descriptor with a read buffer and reset buffer
@@ -322,6 +326,8 @@ void serve(client_info *client) {
     /* Parse URI from GET request */
     char host[MAXLINE];
     char path[MAXLINE];
+    memset(host, 0, MAXLINE * sizeof(char));
+    memset(path, 0, MAXLINE * sizeof(char));
     if (parse_uri(uri, host, path)) {
         printf("Failed to parse URI.\n");
         return;
@@ -330,10 +336,13 @@ void serve(client_info *client) {
     /* Parse server hostname and port */
     char srv_hostname[MAXLINE];
     char srv_port[MAXLINE];
+    memset(srv_hostname, 0, MAXLINE * sizeof(char));
+    memset(srv_port, 0, MAXLINE * sizeof(char));
     parse_port(host, srv_hostname, srv_port);
 
     /* Make proxy_req for proxy */
     char proxy_request[MAXLINE];
+    memset(proxy_request, 0, MAXLINE * sizeof(char));
     if (build_requesthdrs(client, &rio, proxy_request, method, path, host)) {
         return;
     }
@@ -350,6 +359,8 @@ int main(int argc, char **argv) {
         fprintf(stderr, "usage: %s <port>\n", argv[0]);
         exit(1);
     }
+
+    Signal(SIGPIPE, SIG_IGN);
 
     listenfd = open_listenfd(argv[1]);
     if (listenfd < 0) {
