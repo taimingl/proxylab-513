@@ -277,10 +277,7 @@ void do_proxy(client_info *client, char *proxy_request, char *srv_hostname,
  * serve - handles one HTTP request/response transaction
  *
  */
-void *serve(void *vargp) {
-    pthread_detach(pthread_self());
-    client_info *client = (client_info *)vargp;
-
+void serve(client_info *client) {
     // Get some extra info about the client (hostname/port)
     // This is optional, but it's nice to know who's connected
     int res = getnameinfo((SA *)&client->addr, client->addrlen, client->host,
@@ -354,6 +351,17 @@ void *serve(void *vargp) {
     do_proxy(client, proxy_request, srv_hostname, srv_port);
 }
 
+/* Thread routine */
+void *thread(void *vargp) {
+    client_info client_data = *((client_info *)vargp);
+    client_info *client = &client_data;
+    pthread_detach(pthread_self());
+    free((client_info *)vargp);
+    serve(client);
+    close(client->connfd);
+    return NULL;
+}
+
 int main(int argc, char **argv) {
     int listenfd;
     pthread_t tid;
@@ -375,8 +383,10 @@ int main(int argc, char **argv) {
 
     while (1) {
         /* Allocate space on the stack for client info */
-        client_info client_data;
-        client_info *client = &client_data;
+        // client_info client_data;
+        // client_info *client = &client_data;
+
+        client_info *client = malloc(sizeof(client_info));
 
         /* Initialize the length of the address */
         client->addrlen = sizeof(client->addr);
@@ -396,7 +406,7 @@ int main(int argc, char **argv) {
         // close(client->connfd);
 
         /* Spawn new thread to handle client */
-        if (pthread_create(&tid, NULL, serve, (void *)client) != 0) {
+        if (pthread_create(&tid, NULL, thread, (void *)client) != 0) {
             perror("Error creating thread");
         }
     }
