@@ -277,7 +277,10 @@ void do_proxy(client_info *client, char *proxy_request, char *srv_hostname,
  * serve - handles one HTTP request/response transaction
  *
  */
-void serve(client_info *client) {
+void *serve(void *vargp) {
+    pthread_detach(pthread_self());
+    client_info *client = (client_info *)vargp;
+
     // Get some extra info about the client (hostname/port)
     // This is optional, but it's nice to know who's connected
     int res = getnameinfo((SA *)&client->addr, client->addrlen, client->host,
@@ -353,6 +356,7 @@ void serve(client_info *client) {
 
 int main(int argc, char **argv) {
     int listenfd;
+    pthread_t tid;
 
     /* Check command line args */
     if (argc != 2) {
@@ -377,6 +381,8 @@ int main(int argc, char **argv) {
         /* Initialize the length of the address */
         client->addrlen = sizeof(client->addr);
 
+        // &client->connfd = malloc(sizeof(int));
+
         /* accept() will block until a client connects to the port */
         client->connfd =
             accept(listenfd, (SA *)&client->addr, &client->addrlen);
@@ -385,9 +391,14 @@ int main(int argc, char **argv) {
             continue;
         }
 
-        /* Connection is established; serve client*/
-        serve(client);
-        close(client->connfd);
+        /* Connection is established; serve client */
+        // serve(client);
+        // close(client->connfd);
+
+        /* Spawn new thread to handle client */
+        if (pthread_create(&tid, NULL, serve, (void *)client) != 0) {
+            perror("Error creating thread");
+        }
     }
 
     return -1; // never reaches here
