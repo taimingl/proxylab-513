@@ -248,7 +248,7 @@ void do_proxy(client_info *client, char *proxy_request, char *srv_hostname,
               char *srv_port) {
     int proxy_clientfd;
     char srv_buf[MAXLINE];
-    rio_t srv_rio;
+    // rio_t srv_rio;
     memset(srv_buf, 0, MAXLINE * sizeof(char));
 
     proxy_clientfd = open_clientfd(srv_hostname, srv_port);
@@ -258,15 +258,14 @@ void do_proxy(client_info *client, char *proxy_request, char *srv_hostname,
         return;
     }
 
-    // rio_readinitb(&srv_rio, proxy_clientfd);
     if (rio_writen(proxy_clientfd, proxy_request, strlen(proxy_request)) < 0) {
         fprintf(stderr, "Error: writing to web server error\n");
         return;
     }
 
-    rio_readinitb(&srv_rio, proxy_clientfd);
+    // rio_readinitb(&srv_rio, proxy_clientfd);
     int size = 0;
-    while ((size = rio_readlineb(&srv_rio, srv_buf, MAXLINE)) > 0) {
+    while ((size = rio_readn(proxy_clientfd, srv_buf, MAXLINE)) > 0) {
         rio_writen(client->connfd, srv_buf, size);
         // printf("%s\n", srv_buf);
     }
