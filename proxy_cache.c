@@ -12,9 +12,9 @@
 #include <string.h>
 
 /* Global variables */
-cache_block_t *head;
-cache_block_t *tail;
-size_t cache_size;
+// cache_block_t *head;
+// cache_block_t *tail;
+// size_t cache_size;
 
 /* Global lock to synchronize shared resource */
 static pthread_mutex_t mutex;
@@ -26,16 +26,16 @@ static pthread_mutex_t mutex;
  */
 void init_cache(cache_t *cache) {
     cache->cache_size = 0;
-    cache->num_block = 0;
-    cache->head = NULL;
-    cache->tail = NULL;
-    // cache->head = (cache_block_t *)Malloc(sizeof(cache_block_t));
-    // cache->tail = (cache_block_t *)Malloc(sizeof(cache_block_t));
-    // cache->head->next = NULL;
-    // cache->head->prev = NULL;
-    // cache->tail->next = NULL;
-    // cache->tail->prev = NULL;
-    // cache->head = cache->tail;
+    // cache->num_block = 0;
+    // cache->head = NULL;
+    // cache->tail = NULL;
+    cache->head = (cache_block_t *)Malloc(sizeof(cache_block_t));
+    cache->tail = (cache_block_t *)Malloc(sizeof(cache_block_t));
+    cache->head->next = NULL;
+    cache->head->prev = NULL;
+    cache->tail->next = NULL;
+    cache->tail->prev = NULL;
+    cache->head = cache->tail;
     pthread_mutex_init(&mutex, NULL);
 }
 
@@ -53,7 +53,7 @@ static void evict_one_cb(cache_t *cache, cache_block_t *curr_cb) {
     curr_cb->next->prev = curr_cb->prev;
     curr_cb->prev->next = curr_cb->next;
     cache->cache_size -= curr_cb->block_size;
-    cache->num_block--;
+    // cache->num_block--;
     curr_cb->prev = NULL;
     curr_cb->next = NULL;
     // Free(curr_cb->key);
@@ -71,8 +71,8 @@ void free_cache(cache_t *cache) {
     while (cache->head->next != cache->tail) {
         evict_one_cb(cache, cache->tail->prev);
     }
-    // Free(cache->head);
-    // Free(cache->tail);
+    Free(cache->head);
+    Free(cache->tail);
     Free(cache);
 }
 
@@ -104,8 +104,8 @@ void insert_cache(cache_t *cache, char *key, char *value, size_t buff_size) {
 
     /* add the new block as the head of cache */
     if (cache->cache_size == 0) { // when cache is still empty
-        cb_to_add->next = cb_to_add;
-        cb_to_add->prev = cb_to_add;
+        // cb_to_add->next = cb_to_add;
+        // cb_to_add->prev = cb_to_add;
         cache->head = cb_to_add;
         cache->tail = cb_to_add;
         // cache->head->next = cb_to_add;
@@ -113,7 +113,7 @@ void insert_cache(cache_t *cache, char *key, char *value, size_t buff_size) {
         // cache->tail->next = cb_to_add;
         // cache->tail->prev = cb_to_add;
     } else {
-        
+
         cache->head->prev = cb_to_add;
         cache->tail->next = cb_to_add;
         cb_to_add->next = cache->head;
@@ -121,7 +121,7 @@ void insert_cache(cache_t *cache, char *key, char *value, size_t buff_size) {
         cache->head = cb_to_add;
     }
     cache->cache_size += cb_to_add->block_size;
-    cache->num_block++;
+    // cache->num_block++;
     pthread_mutex_unlock(&mutex);
 }
 

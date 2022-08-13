@@ -394,6 +394,7 @@ int main(int argc, char **argv) {
 
     /* initialize cache */
     cache = (cache_t *)Malloc(sizeof(cache_t));
+    init_cache(cache);
 
     // pthread_mutex_init(&mutex, NULL);
 
