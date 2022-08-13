@@ -1,11 +1,12 @@
-/*
- * Starter code for proxy lab.
- * Feel free to modify this code in whatever way you wish.
+/**
+ * @file proxy.c
+ * @brief A multi-threaded web server proaxy with cache capacbility.
+ *
+ * @author Taiming Liu <taimingl@andrew.cmu.edu>
  */
 
-/* Some useful includes to help you get started */
-
 #include "csapp.h"
+#include "proxy_cache.h"
 
 #include <assert.h>
 #include <ctype.h>
@@ -37,13 +38,6 @@
 #define dbg_printf(...)
 #endif
 
-/*
- * Max cache and object sizes
- * You might want to move these to the file containing your cache implementation
- */
-#define MAX_CACHE_SIZE (1024 * 1024)
-#define MAX_OBJECT_SIZE (100 * 1024)
-
 #define HOSTLEN 256
 #define SERVLEN 8
 
@@ -68,6 +62,13 @@ static const char *header_user_agent = "User-Agent: Mozilla/5.0"
                                        " Gecko/20220411 Firefox/63.0.1\r\n";
 static const char *header_connection = "Connection: close\r\n";
 static const char *proxy_header_connection = "Proxy-Connection: close\r\n";
+
+/* Global variables */
+
+/** @brief cache structure to cache requests */
+static cache_t *cache = NULL;
+
+static pthread_mutex_t mutex;
 
 /**
  * clienterror - returns an error message to the client
@@ -245,31 +246,49 @@ bool build_requesthdrs(client_info *client, rio_t *rp, char *proxy_request,
  *
  */
 void do_proxy(client_info *client, char *proxy_request, char *srv_hostname,
-              char *srv_port) {
+              char *srv_port, char *uri) {
     int proxy_clientfd;
     char srv_buf[MAXLINE];
-    // rio_t srv_rio;
+    size_t response_size = 0;
+    char cache_value[MAX_OBJECT_SIZE];
     memset(srv_buf, 0, MAXLINE * sizeof(char));
 
-    proxy_clientfd = open_clientfd(srv_hostname, srv_port);
-    if (proxy_clientfd < 0) {
-        fprintf(stderr, "Failed to connect to web server: %s:%s\n",
-                srv_hostname, srv_port);
-        return;
-    }
+    pthread_mutex_lock(&mutex);
+    if (retrieve_cache(cache, uri, cache_value) != 0) {
+        // not found in cache, retrieve from web server
+        proxy_clientfd = open_clientfd(srv_hostname, srv_port);
+        if (proxy_clientfd < 0) {
+            fprintf(stderr, "Failed to connect to web server: %s:%s\n",
+                    srv_hostname, srv_port);
+            return;
+        }
 
-    if (rio_writen(proxy_clientfd, proxy_request, strlen(proxy_request)) < 0) {
-        fprintf(stderr, "Error: writing to web server error\n");
-        return;
-    }
+        if (rio_writen(proxy_clientfd, proxy_request, strlen(proxy_request)) <
+            0) {
+            fprintf(stderr, "Error: writing to web server error\n");
+            return;
+        }
 
-    // rio_readinitb(&srv_rio, proxy_clientfd);
-    int size = 0;
-    while ((size = rio_readn(proxy_clientfd, srv_buf, MAXLINE)) > 0) {
-        rio_writen(client->connfd, srv_buf, size);
-        // printf("%s\n", srv_buf);
+        int size = 0;
+        while ((size = rio_readn(proxy_clientfd, srv_buf, MAXLINE)) > 0) {
+            response_size += size;
+            if (response_size < MAX_OBJECT_SIZE) {
+                strcat(cache_value, srv_buf);
+            }
+            rio_writen(client->connfd, srv_buf, size);
+        }
+        close(proxy_clientfd);
+
+        // store to cache if total response can fit
+        if (response_size < MAX_OBJECT_SIZE) {
+            insert_cache(cache, uri, cache_value, response_size);
+        }
+
+    } else {
+        // retrieved directly from cache and write to client
+        rio_writen(client->connfd, cache_value, strlen(cache_value));
     }
-    close(proxy_clientfd);
+    pthread_mutex_unlock(&mutex);
 }
 
 /**
@@ -347,7 +366,7 @@ void serve(client_info *client) {
     }
 
     /* finally, proxy the request for client */
-    do_proxy(client, proxy_request, srv_hostname, srv_port);
+    do_proxy(client, proxy_request, srv_hostname, srv_port, uri);
 }
 
 /* Thread routine */
@@ -373,6 +392,11 @@ int main(int argc, char **argv) {
 
     Signal(SIGPIPE, SIG_IGN);
 
+    /* initialize cache */
+    cache = (cache_t *)Malloc(sizeof(cache_t));
+
+    pthread_mutex_init(&mutex, NULL);
+
     listenfd = open_listenfd(argv[1]);
     if (listenfd < 0) {
         fprintf(stderr, "Failed to listen on port: %s\n", argv[1]);
@@ -382,15 +406,10 @@ int main(int argc, char **argv) {
 
     while (1) {
         /* Allocate space on the stack for client info */
-        // client_info client_data;
-        // client_info *client = &client_data;
-
         client_info *client = malloc(sizeof(client_info));
 
         /* Initialize the length of the address */
         client->addrlen = sizeof(client->addr);
-
-        // &client->connfd = malloc(sizeof(int));
 
         /* accept() will block until a client connects to the port */
         client->connfd =
@@ -409,6 +428,8 @@ int main(int argc, char **argv) {
             perror("Error creating thread");
         }
     }
+
+    free_cache(cache);
 
     return -1; // never reaches here
 }
