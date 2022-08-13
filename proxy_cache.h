@@ -44,4 +44,4 @@ void free_cache(cache_t *cache);
 void insert_cache(cache_t *cache, char *key, char *value, size_t buff_size);
 
 /*  */
-int retrieve_cache(cache_t *cache, char *search_key, char *value);
+size_t retrieve_cache(cache_t *cache, char *search_key, char *value);

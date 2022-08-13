@@ -38,6 +38,8 @@
 #define dbg_printf(...)
 #endif
 
+#define THREAD
+
 #define HOSTLEN 256
 #define SERVLEN 8
 
@@ -66,9 +68,7 @@ static const char *proxy_header_connection = "Proxy-Connection: close\r\n";
 /* Global variables */
 
 /** @brief cache structure to cache requests */
-static cache_t *cache = NULL;
-
-// static pthread_mutex_t mutex;
+static cache_t *cache;
 
 /**
  * clienterror - returns an error message to the client
@@ -125,10 +125,6 @@ void clienterror(int fd, const char *errnum, const char *shortmsg,
  */
 
 int parse_uri(char *uri, char *host, char *path) {
-    // /* Asuume URI starts with / */
-    // if (uri[0] != '/') {
-    //     return 1;
-    // }
 
     /* Make a valiant effort to prevent directory traversal attacks */
     if (strstr(uri, "/../") != NULL) {
@@ -228,13 +224,6 @@ bool build_requesthdrs(client_info *client, rio_t *rp, char *proxy_request,
         }
 
         strcat(proxy_request, buf);
-
-        // /* Convert name to lowercase */
-        // for (size_t i = 0; name[i] != '\0'; i++) {
-        //     name[i] = tolower(name[i]);
-        // }
-
-        // printf("%s: %s\n", name, value);
     }
 }
 
@@ -249,12 +238,16 @@ void do_proxy(client_info *client, char *proxy_request, char *srv_hostname,
               char *srv_port, char *uri) {
     int proxy_clientfd;
     char srv_buf[MAXLINE];
+    size_t prev_size = 0;
     size_t response_size = 0;
+    size_t cache_value_size;
     char cache_value[MAX_OBJECT_SIZE];
+    // char *cache_value = (char *)Malloc(MAX_OBJECT_SIZE);
     memset(srv_buf, 0, MAXLINE * sizeof(char));
+    memset(cache_value, 0, MAX_OBJECT_SIZE * sizeof(char));
 
     // pthread_mutex_lock(&mutex);
-    if (retrieve_cache(cache, uri, cache_value) != 0) {
+    if ((cache_value_size = retrieve_cache(cache, uri, cache_value)) == 0) {
         // not found in cache, retrieve from web server
         proxy_clientfd = open_clientfd(srv_hostname, srv_port);
         if (proxy_clientfd < 0) {
@@ -272,9 +265,11 @@ void do_proxy(client_info *client, char *proxy_request, char *srv_hostname,
         int size = 0;
         while ((size = rio_readn(proxy_clientfd, srv_buf, MAXLINE)) > 0) {
             response_size += size;
-            if (response_size < MAX_OBJECT_SIZE) {
-                strcat(cache_value, srv_buf);
+            if (response_size <= MAX_OBJECT_SIZE) {
+                // strncat(cache_value, srv_buf, size);
+                memcpy(cache_value + prev_size, srv_buf, size);
             }
+            prev_size = response_size;
             rio_writen(client->connfd, srv_buf, size);
         }
         close(proxy_clientfd);
@@ -286,9 +281,8 @@ void do_proxy(client_info *client, char *proxy_request, char *srv_hostname,
 
     } else {
         // retrieved directly from cache and write to client
-        rio_writen(client->connfd, cache_value, strlen(cache_value));
+        rio_writen(client->connfd, cache_value, cache_value_size);
     }
-    // pthread_mutex_unlock(&mutex);
 }
 
 /**
@@ -317,8 +311,6 @@ void serve(client_info *client) {
     if (rio_readlineb(&rio, buf, sizeof(buf)) <= 0) {
         return;
     }
-
-    printf("%s\n", buf);
 
     /* parse the request line and check if it's well-formed */
     char method[MAXLINE];
@@ -369,20 +361,24 @@ void serve(client_info *client) {
     do_proxy(client, proxy_request, srv_hostname, srv_port, uri);
 }
 
+#ifdef THREAD
 /* Thread routine */
-// void *thread(void *vargp) {
-//     client_info client_data = *((client_info *)vargp);
-//     client_info *client = &client_data;
-//     pthread_detach(pthread_self());
-//     free((client_info *)vargp);
-//     serve(client);
-//     close(client->connfd);
-//     return NULL;
-// }
+void *thread(void *vargp) {
+    client_info client_data = *((client_info *)vargp);
+    client_info *client = &client_data;
+    pthread_detach(pthread_self());
+    free((client_info *)vargp);
+    serve(client);
+    close(client->connfd);
+    return NULL;
+}
+#endif
 
 int main(int argc, char **argv) {
     int listenfd;
-    // pthread_t tid;
+#ifdef THREAD
+    pthread_t tid;
+#endif
 
     /* Check command line args */
     if (argc != 2) {
@@ -393,9 +389,8 @@ int main(int argc, char **argv) {
     Signal(SIGPIPE, SIG_IGN);
 
     /* initialize cache */
+    cache = (cache_t *)Malloc(sizeof(cache_t));
     init_cache(cache);
-
-    // pthread_mutex_init(&mutex, NULL);
 
     listenfd = open_listenfd(argv[1]);
     if (listenfd < 0) {
@@ -419,16 +414,17 @@ int main(int argc, char **argv) {
             continue;
         }
 
+#ifndef THREAD
         /* Connection is established; serve client */
         serve(client);
         close(client->connfd);
-
+#else
         /* Spawn new thread to handle client */
-        // if (pthread_create(&tid, NULL, thread, (void *)client) != 0) {
-        //     perror("Error creating thread");
-        // }
+        if (pthread_create(&tid, NULL, thread, (void *)client) != 0) {
+            perror("Error creating thread");
+        }
+#endif
     }
-
     free_cache(cache);
 
     return -1; // never reaches here
