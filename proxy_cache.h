@@ -30,6 +30,7 @@ typedef struct cache_block {
 /* Data structure for the entire available cache */
 typedef struct cache {
     size_t cache_size;
+    size_t num_block;
     cache_block_t *head;
     cache_block_t *tail;
 } cache_t;

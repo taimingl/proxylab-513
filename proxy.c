@@ -68,7 +68,7 @@ static const char *proxy_header_connection = "Proxy-Connection: close\r\n";
 /** @brief cache structure to cache requests */
 static cache_t *cache = NULL;
 
-static pthread_mutex_t mutex;
+// static pthread_mutex_t mutex;
 
 /**
  * clienterror - returns an error message to the client
@@ -253,7 +253,7 @@ void do_proxy(client_info *client, char *proxy_request, char *srv_hostname,
     char cache_value[MAX_OBJECT_SIZE];
     memset(srv_buf, 0, MAXLINE * sizeof(char));
 
-    pthread_mutex_lock(&mutex);
+    // pthread_mutex_lock(&mutex);
     if (retrieve_cache(cache, uri, cache_value) != 0) {
         // not found in cache, retrieve from web server
         proxy_clientfd = open_clientfd(srv_hostname, srv_port);
@@ -288,7 +288,7 @@ void do_proxy(client_info *client, char *proxy_request, char *srv_hostname,
         // retrieved directly from cache and write to client
         rio_writen(client->connfd, cache_value, strlen(cache_value));
     }
-    pthread_mutex_unlock(&mutex);
+    // pthread_mutex_unlock(&mutex);
 }
 
 /**
@@ -395,7 +395,7 @@ int main(int argc, char **argv) {
     /* initialize cache */
     cache = (cache_t *)Malloc(sizeof(cache_t));
 
-    pthread_mutex_init(&mutex, NULL);
+    // pthread_mutex_init(&mutex, NULL);
 
     listenfd = open_listenfd(argv[1]);
     if (listenfd < 0) {
