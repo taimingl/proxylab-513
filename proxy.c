@@ -66,7 +66,7 @@ static const char *proxy_header_connection = "Proxy-Connection: close\r\n";
 /* Global variables */
 
 /** @brief cache structure to cache requests */
-static cache_t *cache = NULL;
+static cache_t *cache;
 
 // static pthread_mutex_t mutex;
 
@@ -393,7 +393,6 @@ int main(int argc, char **argv) {
     Signal(SIGPIPE, SIG_IGN);
 
     /* initialize cache */
-    cache = (cache_t *)Malloc(sizeof(cache_t));
     init_cache(cache);
 
     // pthread_mutex_init(&mutex, NULL);

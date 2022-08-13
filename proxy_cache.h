@@ -20,7 +20,7 @@
 
 /* Node data structure as a single cache block */
 typedef struct cache_block {
-    char key[MAXLINE];
+    char *key;
     char *value;
     size_t block_size;
     struct cache_block *next;
@@ -30,7 +30,6 @@ typedef struct cache_block {
 /* Data structure for the entire available cache */
 typedef struct cache {
     size_t cache_size;
-    // size_t num_block;
     cache_block_t *head;
     cache_block_t *tail;
 } cache_t;
