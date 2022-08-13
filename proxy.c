@@ -66,7 +66,7 @@ static const char *proxy_header_connection = "Proxy-Connection: close\r\n";
 /* Global variables */
 
 /** @brief cache structure to cache requests */
-static cache_t *cache;
+static cache_t *cache = NULL;
 
 // static pthread_mutex_t mutex;
 
@@ -370,19 +370,19 @@ void serve(client_info *client) {
 }
 
 /* Thread routine */
-void *thread(void *vargp) {
-    client_info client_data = *((client_info *)vargp);
-    client_info *client = &client_data;
-    pthread_detach(pthread_self());
-    free((client_info *)vargp);
-    serve(client);
-    close(client->connfd);
-    return NULL;
-}
+// void *thread(void *vargp) {
+//     client_info client_data = *((client_info *)vargp);
+//     client_info *client = &client_data;
+//     pthread_detach(pthread_self());
+//     free((client_info *)vargp);
+//     serve(client);
+//     close(client->connfd);
+//     return NULL;
+// }
 
 int main(int argc, char **argv) {
     int listenfd;
-    pthread_t tid;
+    // pthread_t tid;
 
     /* Check command line args */
     if (argc != 2) {
@@ -420,13 +420,13 @@ int main(int argc, char **argv) {
         }
 
         /* Connection is established; serve client */
-        // serve(client);
-        // close(client->connfd);
+        serve(client);
+        close(client->connfd);
 
         /* Spawn new thread to handle client */
-        if (pthread_create(&tid, NULL, thread, (void *)client) != 0) {
-            perror("Error creating thread");
-        }
+        // if (pthread_create(&tid, NULL, thread, (void *)client) != 0) {
+        //     perror("Error creating thread");
+        // }
     }
 
     free_cache(cache);

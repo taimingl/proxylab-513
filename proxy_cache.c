@@ -204,13 +204,15 @@ static void move_to_front(cache_t *cache, cache_block_t *curr_cb) {
  */
 int retrieve_cache(cache_t *cache, char *search_key, char *value) {
     pthread_mutex_lock(&mutex);
-    cache_block_t *curr_cb = cache->head;
-    while (curr_cb) {
-        if (!strcmp(curr_cb->key, search_key)) {
-            memcpy(value, curr_cb->value, curr_cb->block_size);
-            move_to_front(cache, curr_cb);
-            pthread_mutex_unlock(&mutex);
-            return 0;
+    if (cache->cache_size > 0) {
+        cache_block_t *curr_cb = cache->head;
+        while (curr_cb) {
+            if (!strcmp(curr_cb->key, search_key)) {
+                memcpy(value, curr_cb->value, curr_cb->block_size);
+                move_to_front(cache, curr_cb);
+                pthread_mutex_unlock(&mutex);
+                return 0;
+            }
         }
     }
 
