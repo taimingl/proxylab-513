@@ -63,11 +63,14 @@ static void evict_one_cb(cache_t *cache, cache_block_t *curr_cb) {
  */
 void free_cache(cache_t *cache) {
     pthread_mutex_lock(&mutex);
-    cache_block_t *prev, *curr;
-    curr = cache->head;
+    cache_block_t *prev = NULL;
+    cache_block_t *curr = cache->head;
     while (curr) {
         prev = curr;
         curr = curr->next;
+        evict_one_cb(cache, prev);
+    }
+    if (prev) {
         evict_one_cb(cache, prev);
     }
     Free(cache);

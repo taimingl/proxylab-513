@@ -38,7 +38,9 @@
 #define dbg_printf(...)
 #endif
 
+// for debugging
 #define THREAD
+#define CACHING
 
 #define HOSTLEN 256
 #define SERVLEN 8
@@ -238,16 +240,15 @@ void do_proxy(client_info *client, char *proxy_request, char *srv_hostname,
               char *srv_port, char *uri) {
     int proxy_clientfd;
     char srv_buf[MAXLINE];
+    memset(srv_buf, 0, MAXLINE * sizeof(char));
+#ifdef CACHING
     size_t prev_size = 0;
-    size_t response_size = 0;
     size_t cache_value_size;
     char cache_value[MAX_OBJECT_SIZE];
-    // char *cache_value = (char *)Malloc(MAX_OBJECT_SIZE);
-    memset(srv_buf, 0, MAXLINE * sizeof(char));
     memset(cache_value, 0, MAX_OBJECT_SIZE * sizeof(char));
 
-    // pthread_mutex_lock(&mutex);
     if ((cache_value_size = retrieve_cache(cache, uri, cache_value)) == 0) {
+#endif
         // not found in cache, retrieve from web server
         proxy_clientfd = open_clientfd(srv_hostname, srv_port);
         if (proxy_clientfd < 0) {
@@ -263,17 +264,23 @@ void do_proxy(client_info *client, char *proxy_request, char *srv_hostname,
         }
 
         int size = 0;
+#ifdef CACHING
+        size_t response_size = 0;
+#endif
         while ((size = rio_readn(proxy_clientfd, srv_buf, MAXLINE)) > 0) {
+#ifdef CACHING
             response_size += size;
             if (response_size <= MAX_OBJECT_SIZE) {
                 // strncat(cache_value, srv_buf, size);
                 memcpy(cache_value + prev_size, srv_buf, size);
             }
             prev_size = response_size;
+#endif
             rio_writen(client->connfd, srv_buf, size);
         }
         close(proxy_clientfd);
 
+#ifdef CACHING
         // store to cache if total response can fit
         if (response_size < MAX_OBJECT_SIZE) {
             insert_cache(cache, uri, cache_value, response_size);
@@ -283,6 +290,7 @@ void do_proxy(client_info *client, char *proxy_request, char *srv_hostname,
         // retrieved directly from cache and write to client
         rio_writen(client->connfd, cache_value, cache_value_size);
     }
+#endif
 }
 
 /**
@@ -388,9 +396,11 @@ int main(int argc, char **argv) {
 
     Signal(SIGPIPE, SIG_IGN);
 
+#ifdef CACHING
     /* initialize cache */
     cache = (cache_t *)Malloc(sizeof(cache_t));
     init_cache(cache);
+#endif
 
     listenfd = open_listenfd(argv[1]);
     if (listenfd < 0) {
